@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import traceback
 
 # Add project root to path so `lib` imports work on Vercel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,10 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 ALLOWED_USER_ID = os.environ.get("TELEGRAM_ALLOWED_USER_ID")
 
 
+def _log(msg):
+    print(f"[expense-bot] {msg}", flush=True)
+
+
 def _allowed_ids():
     """Return set of allowed Telegram user IDs."""
     raw = os.environ.get("TELEGRAM_ALLOWED_USER_IDS", ALLOWED_USER_ID or "")
@@ -32,26 +37,37 @@ def _send_message(chat_id: int, text: str):
     return bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
 
 
+@app.route("/", methods=["GET"])
+def health():
+    """Simple health check."""
+    return jsonify({"ok": True, "bot": bool(BOT_TOKEN), "sheet": bool(os.environ.get("GOOGLE_SHEET_ID"))}), 200
+
+
 @app.route("/api/webhook", methods=["POST"])
 def webhook():
     """Handle incoming Telegram updates."""
+    _log(f"Received request: {request.method}")
     try:
         body = request.get_json(force=True)
+        _log(f"Update body: {json.dumps(body)}")
+
         update = Update.de_json(body, None)
 
         if not update.message or not update.message.text:
+            _log("No message text in update")
             return jsonify({"ok": True}), 200
 
         user_id = update.message.from_user.id
         chat_id = update.message.chat_id
         text = update.message.text.strip()
+        _log(f"Message from {user_id}: {text}")
 
         # Auth check
-        if user_id not in _allowed_ids():
-            _send_message(
-                chat_id,
-                "⛔ You're not authorized to use this bot.",
-            )
+        allowed = _allowed_ids()
+        _log(f"Allowed IDs: {allowed}")
+        if user_id not in allowed:
+            _log(f"Unauthorized user: {user_id}")
+            _send_message(chat_id, "⛔ You're not authorized to use this bot.")
             return jsonify({"ok": True}), 200
 
         # Help / start
@@ -69,11 +85,13 @@ def webhook():
         # Parse and append
         try:
             parsed = parse_expense(text)
+            _log(f"Parsed: {parsed}")
             append_row(
                 parsed["date"],
                 parsed["description"],
                 parsed["amount"],
             )
+            _log("Row appended successfully")
             _send_message(
                 chat_id,
                 f"✅ Added to sheet:\n"
@@ -81,11 +99,13 @@ def webhook():
                 f"📅 {parsed['date']}",
             )
         except ValueError as exc:
+            _log(f"Parse error: {exc}")
             _send_message(
                 chat_id,
                 f"⚠️ Could not parse: {exc}\n\nTry: `Lunch 5000`",
             )
         except Exception as exc:
+            _log(f"Sheet error: {traceback.format_exc()}")
             _send_message(
                 chat_id,
                 f"❌ Failed to save to sheet. Please try again.\n_{str(exc)}_",
@@ -94,4 +114,5 @@ def webhook():
         return jsonify({"ok": True}), 200
 
     except Exception as exc:
+        _log(f"Webhook error: {traceback.format_exc()}")
         return jsonify({"error": str(exc)}), 500
