@@ -105,7 +105,7 @@ python -c "from lib.parser import parse_expense; print(parse_expense('Lunch 5000
 
 ```
 .
-├── api/webhook.py       # Vercel serverless entry point
+├── api/webhook.py       # Vercel Flask/WSGI entry point
 ├── lib/parser.py        # Expense message parser
 ├── lib/sheets.py        # Google Sheets API helper
 ├── requirements.txt     # Python dependencies
