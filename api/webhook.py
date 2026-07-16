@@ -8,8 +8,8 @@ import traceback
 # Add project root to path so `lib` imports work on Vercel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import requests
 from flask import Flask, request, jsonify
-import telegram
 from telegram import Update
 
 from lib.parser import parse_expense
@@ -33,14 +33,39 @@ def _allowed_ids():
 
 
 def _send_message(chat_id: int, text: str):
-    bot = telegram.Bot(token=BOT_TOKEN)
-    return bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+    """Send a Telegram message using the HTTP API directly (sync)."""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown",
+    }
+    response = requests.post(url, json=payload, timeout=10)
+    _log(f"Telegram API response: {response.status_code} {response.text}")
+    return response
 
 
 @app.route("/", methods=["GET"])
 def health():
     """Simple health check."""
-    return jsonify({"ok": True, "bot": bool(BOT_TOKEN), "sheet": bool(os.environ.get("GOOGLE_SHEET_ID"))}), 200
+    # Validate JSON credential early
+    creds_ok = False
+    try:
+        creds_json = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+        if creds_json:
+            json.loads(creds_json)
+            creds_ok = True
+    except Exception as exc:
+        _log(f"Invalid GOOGLE_SHEETS_CREDENTIALS_JSON: {exc}")
+
+    return jsonify(
+        {
+            "ok": True,
+            "bot": bool(BOT_TOKEN),
+            "sheet_id": bool(os.environ.get("GOOGLE_SHEET_ID")),
+            "creds_json_valid": creds_ok,
+        }
+    ), 200
 
 
 @app.route("/api/webhook", methods=["POST"])

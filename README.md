@@ -57,7 +57,7 @@ GOOGLE_SHEET_ID=your_sheet_id
 GOOGLE_SHEET_RANGE=Sheet1!A:C
 ```
 
-> For Vercel, paste the entire service-account JSON into the `GOOGLE_SHEETS_CREDENTIALS_JSON` environment variable.
+> For Vercel, paste the entire service-account JSON into the `GOOGLE_SHEETS_CREDENTIALS_JSON` environment variable. It must be valid JSON on a single line. On macOS, copy it as a single line with: `cat your-key.json | tr -d '\n' | pbcopy`
 
 ### 5. Deploy to Vercel
 
